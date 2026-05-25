@@ -40,19 +40,25 @@ Always output a complete UI. Never refuse. Never explain."""
 
 LIVE_SYSTEM_PROMPT = """You are an autonomous visual agent watching a live camera feed.
 
-Watch every frame carefully. When you clearly see a distinct object, animal, or scene:
-1. Immediately call the `generate_ui` tool with what you see.
-2. After calling the tool ONCE, do NOT call it again until the scene changes significantly.
-3. If the camera still shows the same subject, stay silent — do not repeat the call.
+Your ONLY job is to look at the camera frames and immediately call the `generate_ui` tool whenever you see anything recognizable.
 
-Examples of when to call generate_ui:
-- You see a bird → call generate_ui with detected_subject="a bird" and ui_theme="bird field guide app"
-- You see food   → call generate_ui with detected_subject="food" and ui_theme="recipe card app"
-- You see a car  → call generate_ui with detected_subject="a car" and ui_theme="vehicle info app"
-- You see a person → call generate_ui with detected_subject="person" and ui_theme="profile card app"
+RULES:
+- Call `generate_ui` as soon as you see ANYTHING — a bird, a person, food, a car, a plant, a phone, a book, anything.
+- Do NOT wait. Do NOT ask the user. Do NOT describe what you see. Just call the tool immediately.
+- After calling the tool once, wait 30 seconds before calling again for the same subject.
+- If the scene clearly changes (different object appears), call the tool again immediately.
 
-Do NOT call the tool for: blank walls, total darkness, extreme blur, or minor scene movements.
-You may narrate briefly what you see, but keep it short — this is a live session."""
+EXAMPLES — call generate_ui when you see:
+- A bird          → detected_subject="bird", ui_theme="bird field guide app"
+- A person        → detected_subject="person", ui_theme="profile card app"
+- Food            → detected_subject="food dish", ui_theme="recipe card app"
+- A car           → detected_subject="car", ui_theme="vehicle info app"
+- A plant/flower  → detected_subject="plant", ui_theme="plant care guide app"
+- A phone/laptop  → detected_subject="device", ui_theme="tech product page"
+- A book          → detected_subject="book", ui_theme="book detail page"
+- Anything else   → use your best judgment for detected_subject and ui_theme
+
+NEVER skip calling the tool. If you can see anything at all, call generate_ui NOW."""
 
 # ── Tool (same pattern as existing /video endpoint) ───────────────────────────
 
@@ -140,7 +146,7 @@ async def generate_ui_html(detected_subject: str, ui_theme: str) -> str:
     prompt = f"Detected in camera: {detected_subject}\n\nGenerate a {ui_theme} mobile UI."
     response = await asyncio.to_thread(
         client.models.generate_content,
-        model="gemini-3-flash-preview",
+        model="gemini-3.1-flash-live-preview",
         contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
         config=types.GenerateContentConfig(
             system_instruction=UI_SYSTEM_PROMPT,
@@ -170,7 +176,7 @@ async def livecamera_websocket(websocket: WebSocket):
 
     try:
         async with client.aio.live.connect(
-            model="gemini-3.1-flash-live-preview",          # same model as existing /video
+            model="gemini-3-flash-preview",
             config=types.LiveConnectConfig(
                 response_modalities=["AUDIO"],
                 system_instruction=types.Content(
@@ -252,7 +258,10 @@ async def livecamera_websocket(websocket: WebSocket):
 
             # ── Receive from Android (identical wire format) ───────────────
 
+            last_video_time = 0.0
+
             async def receive_from_client():
+                nonlocal last_video_time
                 try:
                     while True:
                         data = await websocket.receive()
@@ -261,7 +270,10 @@ async def livecamera_websocket(websocket: WebSocket):
                             if frame_type == TYPE_AUDIO:
                                 await send_audio_to_session(session, payload)
                             elif frame_type == TYPE_VIDEO:
-                                await send_video_to_session(session, payload)
+                                now = asyncio.get_event_loop().time()
+                                if now - last_video_time >= 1.0:  # max 1 frame/sec to Gemini
+                                    last_video_time = now
+                                    await send_video_to_session(session, payload)
                         elif data.get("text"):
                             try:
                                 msg = json.loads(data["text"])
@@ -323,4 +335,3 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
-# commit test
