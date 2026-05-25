@@ -263,7 +263,7 @@ async def livecamera_websocket(websocket: WebSocket):
                                 await send_audio_to_session(session, payload)
                             elif frame_type == TYPE_VIDEO:
                                 now = asyncio.get_event_loop().time()
-                                if now - last_video_time >= 0.5:  # 2 frames/sec to Gemini
+                                if now - last_video_time >= 0.35:  # 2 frames/sec to Gemini
                                     last_video_time = now
                                     await send_video_to_session(session, payload)
                         elif data.get("text"):
