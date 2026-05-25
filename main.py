@@ -38,27 +38,19 @@ Examples:
  - Person → Profile / contact card UI
 Always output a complete UI. Never refuse. Never explain."""
 
-LIVE_SYSTEM_PROMPT = """You are an autonomous visual agent watching a live camera feed.
+LIVE_SYSTEM_PROMPT = """You are a bird-detection agent watching a live camera feed.
 
-Your ONLY job is to look at the camera frames and immediately call the `generate_ui` tool whenever you see anything recognizable.
+Your SINGLE task: the moment you see a BIRD in any frame, you MUST call the `generate_ui` tool. This is not optional.
 
-RULES:
-- Call `generate_ui` as soon as you see ANYTHING — a bird, a person, food, a car, a plant, a phone, a book, anything.
-- Do NOT wait. Do NOT ask the user. Do NOT describe what you see. Just call the tool immediately.
-- After calling the tool once, wait 30 seconds before calling again for the same subject.
-- If the scene clearly changes (different object appears), call the tool again immediately.
+STRICT RULES:
+- The INSTANT a bird appears in the frame — call `generate_ui` immediately. Real bird, photo of a bird, drawing of a bird, bird on a screen — ALL count.
+- Set detected_subject to the specific bird if you can identify it (e.g. "a robin", "a parrot", "a blue jay"); otherwise just "a bird".
+- Set ui_theme = "bird field guide app".
+- Do NOT describe the bird out loud first. Do NOT wait for a better frame. Do NOT ask permission. CALL THE TOOL.
+- After you call the tool for a bird, wait until the bird LEAVES the frame and a DIFFERENT bird appears before calling again. Do not spam duplicate calls for the same continuous view.
+- If you also see other clear subjects (food, car, plant, person) and there is NO bird, you may call generate_ui for those too with an appropriate ui_theme. But birds are the priority.
 
-EXAMPLES — call generate_ui when you see:
-- A bird          → detected_subject="bird", ui_theme="bird field guide app"
-- A person        → detected_subject="person", ui_theme="profile card app"
-- Food            → detected_subject="food dish", ui_theme="recipe card app"
-- A car           → detected_subject="car", ui_theme="vehicle info app"
-- A plant/flower  → detected_subject="plant", ui_theme="plant care guide app"
-- A phone/laptop  → detected_subject="device", ui_theme="tech product page"
-- A book          → detected_subject="book", ui_theme="book detail page"
-- Anything else   → use your best judgment for detected_subject and ui_theme
-
-NEVER skip calling the tool. If you can see anything at all, call generate_ui NOW."""
+You may stay silent otherwise. Your job is to WATCH and FIRE the tool on birds. Nothing else matters."""
 
 # ── Tool (same pattern as existing /video endpoint) ───────────────────────────
 
@@ -271,7 +263,7 @@ async def livecamera_websocket(websocket: WebSocket):
                                 await send_audio_to_session(session, payload)
                             elif frame_type == TYPE_VIDEO:
                                 now = asyncio.get_event_loop().time()
-                                if now - last_video_time >= 1.0:  # max 1 frame/sec to Gemini
+                                if now - last_video_time >= 0.5:  # 2 frames/sec to Gemini
                                     last_video_time = now
                                     await send_video_to_session(session, payload)
                         elif data.get("text"):
