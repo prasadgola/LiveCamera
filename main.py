@@ -146,7 +146,7 @@ async def generate_ui_html(detected_subject: str, ui_theme: str) -> str:
     prompt = f"Detected in camera: {detected_subject}\n\nGenerate a {ui_theme} mobile UI."
     response = await asyncio.to_thread(
         client.models.generate_content,
-        model="gemini-3.1-flash-live-preview",
+        model="gemini-3-flash-preview",
         contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
         config=types.GenerateContentConfig(
             system_instruction=UI_SYSTEM_PROMPT,
@@ -176,7 +176,7 @@ async def livecamera_websocket(websocket: WebSocket):
 
     try:
         async with client.aio.live.connect(
-            model="gemini-3-flash-preview",
+            model="gemini-3.1-flash-live-preview",
             config=types.LiveConnectConfig(
                 response_modalities=["AUDIO"],
                 system_instruction=types.Content(
